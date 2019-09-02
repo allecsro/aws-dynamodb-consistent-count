@@ -28,7 +28,7 @@ session = boto3.Session(profile_name=args.profile)
 dynamodb = session.resource("dynamodb", region_name=args.region, endpoint_url=args.endpoint)
 table = dynamodb.Table(args.table)
 
-print("Checking if table %s exists and or waiting to be created..." % (table))
+print(f'Checking if table {table} exists and or waiting to be created...')
 
 # Wait if the table does not exist
 table.meta.client.get_waiter('table_exists').wait(TableName=args.table)
