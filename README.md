@@ -37,3 +37,7 @@ If you want to perform a parallel count use the script like so:
  python consistentTableCount.py --profile=prod --table Users --segments=5
 ```
 
+Either way you need to make sure you have properly configured the table read throughput to avoid throtlled requests.
+
+A parallel count with a large number of segments can easily consume all of the provisioned throughput for the table. It is best to avoid such counts if the table or index is also incurring heavy read or write activity from other applications.
+
