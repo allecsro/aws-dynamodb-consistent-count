@@ -28,3 +28,4 @@ $ pip install -r requirements.txt
 ```
  python consistentTableCount.py --profile=prod --table Users
 ```
+This will perform a sequencial consistent table item count. For parallel scanning a modification is required on the script to provide the `TotalSegments` and `Segment` number for each scan operation.
