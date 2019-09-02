@@ -8,16 +8,18 @@ import threading
 
 # Declare the arguments required to perform the scan
 parser = argparse.ArgumentParser()
-parser.add_argument("-t", "--table", type=str, help="Provide the name of the table",
+parser.add_argument("-t", "--table", type=str, help="Provide the name of the table.",
                     nargs='?', required=True)
 parser.add_argument("-p", "--profile", type=str, help="AWS credentials profile, the profile of the aws credentials as defined in ~/.aws/credentials",
                     nargs='?', default="default" , const=0)
-parser.add_argument("-r", "--region", type=str, help="Provide an AWS Region (ex: eu-west-1)",
+parser.add_argument("-r", "--region", type=str, help="Provide an AWS Region (ex: eu-west-1).",
                     nargs='?', default="us-east-1" , const=0)
-parser.add_argument("-e", "--endpoint", type=str, help="Optional. Provide an DynamoDB endpoint. (ex: https://dynamodb.us-east-1.amazonaws.com)",
+parser.add_argument("-e", "--endpoint", type=str, help="Optional. Provide an DynamoDB endpoint. (ex: https://dynamodb.us-east-1.amazonaws.com).",
                     nargs='?', default="https://dynamodb.us-east-1.amazonaws.com" , const=0)
-parser.add_argument("-s", "--segments", type=int, help="Optional. Represents the total number of segments into which the Scan operation will be divided",
+parser.add_argument("-s", "--segments", type=int, help="Optional. Represents the total number of segments into which the Scan operation will be divided.",
                     nargs='?', default=1 , const=0)
+parser.add_argument("-l", "--limit", type=int, help="Optional. The maximum number of items to be counted per request. This can help prevent situations where one worker consumes all of the provisioned throughput, at the expense of all other workers.",
+                    nargs='?', default=500 , const=0)
 args = parser.parse_args()
 
 
@@ -26,9 +28,9 @@ session = boto3.Session(profile_name=args.profile)
 dynamodb = session.resource("dynamodb", region_name=args.region, endpoint_url=args.endpoint)
 table = dynamodb.Table(args.table)
 
-print("Checking if table %s exists and if not waiting to be created..." % (table))
+print("Checking if table %s exists and or waiting to be created..." % (table))
 
-# Wait until the table exists.
+# Wait if the table does not exist
 table.meta.client.get_waiter('table_exists').wait(TableName=args.table)
 
 print(f'Counting records for table {table} on region {args.region}...')
@@ -67,6 +69,7 @@ class scanThread (threading.Thread):
             Select="COUNT",
             TotalSegments=args.segments,
             Segment=self.segment,
+            Limit=args.limit,
             ConsistentRead=True
         )
 
@@ -80,6 +83,7 @@ class scanThread (threading.Thread):
                 ConsistentRead=True,
                 TotalSegments=args.segments,
                 Segment=self.segment,
+                Limit=args.limit,
                 ExclusiveStartKey=lastEvaluatedKey
             )
 
