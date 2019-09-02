@@ -25,16 +25,29 @@ $ pip install -r requirements.txt
 
 ## Usage
 
+```
+usage: consistentTableCount.py [-h] -t [TABLE] [-p [PROFILE]] [-r [REGION]]
+                               [-e [ENDPOINT]] [-s [SEGMENTS]] [-l [LIMIT]]
+                               [-no]
+```
+
+
 To perform a sequencial consistent table item count use the script like this:
 
 ```
- python consistentTableCount.py --profile=prod --table Users
+$ python consistentTableCount.py --profile=prod --table Users
 ```
 
 If you want to perform a parallel count use the script like so:
 
 ```
- python consistentTableCount.py --profile=prod --table Users --segments=5
+$ python consistentTableCount.py --profile=prod --table Users --segments=5
+```
+
+If you want to use this script as part of a piped command, you can use the `--silent` to make it output just the counted items:
+
+```
+$ python consistentTableCount.py --profile=prod --table Users --segments=5 --silent
 ```
 
 Either way you need to make sure you have properly configured the table read throughput to avoid throtlled requests.

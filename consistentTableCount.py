@@ -20,6 +20,7 @@ parser.add_argument("-s", "--segments", type=int, help="Optional. Represents the
                     nargs='?', default=1 , const=0)
 parser.add_argument("-l", "--limit", type=int, help="Optional. The maximum number of items to be counted per request. This can help prevent situations where one worker consumes all of the provisioned throughput, at the expense of all other workers.",
                     nargs='?', default=500 , const=0)
+parser.add_argument("-no", "--silent", help="If the script should output just the total count", action='store_true')
 args = parser.parse_args()
 
 
@@ -28,13 +29,15 @@ session = boto3.Session(profile_name=args.profile)
 dynamodb = session.resource("dynamodb", region_name=args.region, endpoint_url=args.endpoint)
 table = dynamodb.Table(args.table)
 
-print(f'Checking if table {table} exists and or waiting to be created...')
+if args.silent == False:
+    print(f'Checking if table {table} exists and or waiting to be created...')
 
 # Wait if the table does not exist
 table.meta.client.get_waiter('table_exists').wait(TableName=args.table)
 
-print(f'Counting records for table {table} on region {args.region}...')
-print(f'Aprox item count: {table.item_count}')
+if args.silent == False:
+    print(f'Counting records for table {table} on region {args.region}...')
+    print(f'Aprox item count: {table.item_count}')
 
 
 # Define global variables
@@ -42,9 +45,10 @@ threadLock = threading.Lock()
 totalCount = 0
 threads = []
 
-# Initialize the progress bar
-bar = progressbar.ProgressBar(maxval=table.item_count, widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
-bar.start()
+# Initialize the progress bar if the output is verbose
+if args.silent == False:
+    bar = progressbar.ProgressBar(maxval=table.item_count, widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
+    bar.start()
 
 
 def update_total_count(count):
@@ -53,8 +57,10 @@ def update_total_count(count):
     threadLock.acquire()
 
     totalCount += count
-    # Update the progress bar, but keep in mind that we might get more items than the initial estimated items count
-    bar.update(min(totalCount, table.item_count))
+
+    if args.silent == False:
+        # Update the progress bar, but keep in mind that we might get more items than the initial estimated items count
+        bar.update(min(totalCount, table.item_count))
 
     threadLock.release()
 
@@ -88,7 +94,8 @@ class scanThread (threading.Thread):
             )
 
             if (response['ResponseMetadata']['HTTPStatusCode'] != 200):
-                print(response)
+                if args.silent == False:
+                    print(response)
                 break
             
             update_total_count(response.get('Count', 0))  
@@ -109,7 +116,9 @@ for i in range(args.segments):
 for t in threads:
    t.join()
 
-bar.finish()
-
-print(f'Scanned item count: {totalCount}')
-print(f'Execution time {int(time.time() - start)} seconds')
+if args.silent == False:
+    bar.finish()
+    print(f'Scanned item count: {totalCount}')
+    print(f'Execution time {int(time.time() - start)} seconds')
+else:
+    print(totalCount)
