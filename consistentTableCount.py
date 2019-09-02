@@ -1,10 +1,10 @@
-from __future__ import print_function # Python 2/3 compatibility
+#!/usr/bin/python3
+
 import boto3
-import json
-import decimal
 import argparse
 import progressbar
-from boto3.dynamodb.conditions import Key, Attr
+import time
+import threading
 
 # Declare the arguments required to perform the scan
 parser = argparse.ArgumentParser()
@@ -14,8 +14,10 @@ parser.add_argument("-p", "--profile", type=str, help="AWS credentials profile, 
                     nargs='?', default="default" , const=0)
 parser.add_argument("-r", "--region", type=str, help="Provide an AWS Region (ex: eu-west-1)",
                     nargs='?', default="us-east-1" , const=0)
-parser.add_argument("-e", "--endpoint", type=str, help="Optiona. Provide an DynamoDB endpoint. (ex: https://dynamodb.us-east-1.amazonaws.com)",
+parser.add_argument("-e", "--endpoint", type=str, help="Optional. Provide an DynamoDB endpoint. (ex: https://dynamodb.us-east-1.amazonaws.com)",
                     nargs='?', default="https://dynamodb.us-east-1.amazonaws.com" , const=0)
+parser.add_argument("-s", "--segments", type=int, help="Optional. Represents the total number of segments into which the Scan operation will be divided",
+                    nargs='?', default=1 , const=0)
 args = parser.parse_args()
 
 
@@ -29,39 +31,81 @@ print("Checking if table %s exists and if not waiting to be created..." % (table
 # Wait until the table exists.
 table.meta.client.get_waiter('table_exists').wait(TableName=args.table)
 
-print("Counting records for table %s on region %s..." % (table, args.region))
-print("Aprox item count: %d" % (table.item_count))
+print(f'Counting records for table {table} on region {args.region}...')
+print(f'Aprox item count: {table.item_count}')
 
+
+# Define global variables
+threadLock = threading.Lock()
+totalCount = 0
+threads = []
 
 # Initialize the progress bar
 bar = progressbar.ProgressBar(maxval=table.item_count, widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
 bar.start()
 
 
-response = table.scan(
-    Select="COUNT",
-    ConsistentRead=True
-)
+def update_total_count(count):
+    global totalCount
+    global bar
+    threadLock.acquire()
 
-totalCount = response.get('Count', 0)
-
-while 'LastEvaluatedKey' in response: 
-    lastEvaluatedKey = response.get('LastEvaluatedKey', None)
-    
-    response = table.scan(
-        Select="COUNT",
-        ConsistentRead=True,
-        ExclusiveStartKey=lastEvaluatedKey
-    )
-
-    if (response['ResponseMetadata']['HTTPStatusCode'] != 200):
-        print(response)
-        break
-
-    totalCount += response.get('Count', 0)
-
+    totalCount += count
     # Update the progress bar, but keep in mind that we might get more items than the initial estimated items count
     bar.update(min(totalCount, table.item_count))
 
+    threadLock.release()
+
+
+class scanThread (threading.Thread):
+    def __init__(self, segment, name):
+      threading.Thread.__init__(self)
+      self.segment = segment
+      self.name = name
+    def run(self):
+        response = table.scan(
+            Select="COUNT",
+            TotalSegments=args.segments,
+            Segment=self.segment,
+            ConsistentRead=True
+        )
+
+        update_total_count(response.get('Count', 0))
+
+        while 'LastEvaluatedKey' in response: 
+            lastEvaluatedKey = response.get('LastEvaluatedKey', None)
+            
+            response = table.scan(
+                Select="COUNT",
+                ConsistentRead=True,
+                TotalSegments=args.segments,
+                Segment=self.segment,
+                ExclusiveStartKey=lastEvaluatedKey
+            )
+
+            if (response['ResponseMetadata']['HTTPStatusCode'] != 200):
+                print(response)
+                break
+            
+            update_total_count(response.get('Count', 0))  
+
+
+
+# Record the start time of the script for statistics
+start = time.time()
+
+# Start the threads
+for i in range(args.segments):
+    thread = scanThread(i, f'ScanSegment-{i}')
+    thread.start()
+    threads.append(thread)
+
+
+# Wait for all threads to complete
+for t in threads:
+   t.join()
+
 bar.finish()
-print("Scanned item count: %d" % (totalCount))
+
+print(f'Scanned item count: {totalCount}')
+print(f'Execution time {int(time.time() - start)} seconds')
