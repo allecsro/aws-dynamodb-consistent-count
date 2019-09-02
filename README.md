@@ -22,3 +22,9 @@ After this you need to install the required python dependencies:
 ```
 $ pip install -r requirements.txt
 ```
+
+## Usage
+
+```
+ python consistentTableCount.py --profile=prod --table Users
+```
