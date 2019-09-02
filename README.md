@@ -37,3 +37,4 @@ If you want to perform a parallel count use the script like so:
  python consistentTableCount.py --profile=prod --table Users --segments=5
 ```
 
+Either way you need to make sure you have properly configured the table read throughput to avoid throtlled requests.
